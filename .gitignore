@@ -26,9 +26,9 @@ Thumbs.db
 logs/
 
 # Local test artifacts
+test/artifacts/
 test/traces/
 test/reports/
-test/artifacts/
 
 # Temporary local files
 .tmp_mcp_probe/

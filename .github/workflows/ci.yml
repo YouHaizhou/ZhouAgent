@@ -9,10 +9,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate-flow-tests:
+  validate-cases:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,11 +21,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Expose source package
-        run: echo "PYTHONPATH=${{ github.workspace }}/src" >> $GITHUB_ENV
-
-      - name: Syntax check project sources
-        run: python -m compileall src
+      - name: Install package for validation commands
+        run: pip install -e .
 
       - name: Validate structured agent cases
         run: python -m zhou.testcases ./test/agent_cases
@@ -38,7 +34,41 @@ jobs:
           python -m zhou.testcases ./test/agent_cases --category memory
           python -m zhou.testcases ./test/agent_cases --category answer
 
-  # This project currently separates flow-test gatekeeping from
-  # heavier real-run evaluation. When secrets, Docker, and memory
-  # infrastructure are stabilized, add a second job here for
-  # zhou.test_runner-based smoke execution.
+  integration-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package and pytest
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run mock/stub flow integration tests
+        run: pytest tests/integration -q
+
+  compile-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax check project sources
+        run: python -m compileall src tests
+
+  # Real-run regression and quality evaluation stay separated from
+  # this CI gate for now, because they depend on local infra,
+  # external services, and later effect-evaluation strategy.

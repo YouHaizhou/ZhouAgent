@@ -46,7 +46,8 @@ def load_case(path:Path)->AgentCase:
     return AgentCase(name=_required_str(payload,"name"),category=_validated_category(payload),description=_required_str(payload,"description"),input=_required_str(payload,"input"),environment=_parse_environment(_required_dict(payload,"environment")),assertions=_parse_assertions(_required_dict(payload,"assertions")),analysis=_parse_analysis(_required_dict(payload,"analysis")),path=path)
 def build_runner_config(cases_root:Path,category_filter:list[str],max_cases:int|None)->RunnerConfig:
     test_root=cases_root.parent if cases_root.name=="agent_cases" else cases_root.parent.parent
-    return RunnerConfig(cases_root,test_root/"traces",test_root/"artifacts",test_root/"reports",category_filter,max_cases)
+    artifacts_root=test_root/"artifacts"
+    return RunnerConfig(cases_root,artifacts_root/"traces",artifacts_root,artifacts_root/"reports",category_filter,max_cases)
 def run_cases_skeleton(config:RunnerConfig)->tuple[list[CaseRunResult],list[str]]:
     load_result=load_cases(config.cases_root);selected=_filter_cases(load_result.cases,config.category_filter,config.max_cases);results=[]
     for case in selected:
