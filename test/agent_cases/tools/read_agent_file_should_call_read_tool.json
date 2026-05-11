@@ -1,0 +1,44 @@
+{
+  "name": "read_agent_file_should_call_read_tool",
+  "category": "tools",
+  "description": "读取 Agent.md 时应触发读文件工具。",
+  "input": "读取 Agent.md 的内容，并概括它的职责",
+  "environment": {
+    "cwd": "project_root",
+    "session_mode": "isolated",
+    "memory_mode": "real"
+  },
+  "assertions": {
+    "flow": {
+      "expect_success": true,
+      "expect_final_answer": true,
+      "expect_turn_persisted": true
+    },
+    "tools": {
+      "must_call": ["filesystem.read_file"],
+      "must_not_call": [],
+      "call_order_any_of": [
+        ["filesystem.read_file"],
+        ["filesystem.list_dir", "filesystem.read_file"]
+      ],
+      "argument_contains": {
+        "filesystem.read_file": ["Agent.md"]
+      }
+    },
+    "memory": {
+      "expect_search": true,
+      "expect_write": true,
+      "expected_scopes": ["session"],
+      "expected_classes": []
+    },
+    "answer": {
+      "contains": ["Agent.md", "职责"],
+      "not_contains": ["文件不存在", "无法访问"],
+      "min_length": 30
+    }
+  },
+  "analysis": {
+    "failure_tags": ["tool", "answer"],
+    "notes": "如果工具未触发，优先检查 tool registry 刷新和函数映射。"
+  }
+}

@@ -1,0 +1,191 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>Zhou 项目代码结构图册</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f7f8fa;color:#1f2328;line-height:1.6}.container{max-width:1440px;margin:0 auto;padding:24px}h1,h2{margin-top:32px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:18px 0;box-shadow:0 2px 8px rgba(0,0,0,.04)}.tip{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px}.desc{color:#4b5563;margin-top:10px}.stage{overflow:auto;max-height:78vh;border:1px solid #eef2f7;border-radius:10px;background:#fcfcfd;cursor:grab}.stage.dragging{cursor:grabbing;user-select:none}.canvas{transform-origin:top left;width:max-content;min-width:1100px;padding:12px}.mermaid svg{transform-origin:top left}.hint{font-size:13px;color:#4b5563;margin:10px 0 0}</style><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';mermaid.initialize({startOnLoad:true,theme:'default',securityLevel:'loose'});window.addEventListener('DOMContentLoaded',async()=>{try{await mermaid.run()}catch(e){console.error(e)}document.querySelectorAll('.diagram').forEach(setupDiagram)});function setupDiagram(diagram){const stage=diagram.querySelector('.stage');const canvas=diagram.querySelector('.canvas');const svg=diagram.querySelector('.mermaid svg');if(!stage||!canvas||!svg)return;let scale=1,min=.35,max=3,isDragging=false,startX=0,startY=0,startLeft=0,startTop=0;const apply=()=>{svg.style.transform=`scale(${scale})`};stage.addEventListener('wheel',e=>{e.preventDefault();const rect=stage.getBoundingClientRect();const mouseX=e.clientX-rect.left+stage.scrollLeft;const mouseY=e.clientY-rect.top+stage.scrollTop;const prev=scale;scale+=e.deltaY<0?.08:-.08;scale=Math.max(min,Math.min(max,+scale.toFixed(2)));apply();const ratio=scale/prev;stage.scrollLeft=mouseX*ratio-(e.clientX-rect.left);stage.scrollTop=mouseY*ratio-(e.clientY-rect.top)},{passive:false});stage.addEventListener('mousedown',e=>{if(e.button!==0)return;isDragging=true;stage.classList.add('dragging');startX=e.clientX;startY=e.clientY;startLeft=stage.scrollLeft;startTop=stage.scrollTop});window.addEventListener('mousemove',e=>{if(!isDragging)return;stage.scrollLeft=startLeft-(e.clientX-startX);stage.scrollTop=startTop-(e.clientY-startY)});window.addEventListener('mouseup',()=>{isDragging=false;stage.classList.remove('dragging')});apply()}</script></head><body><div class="container"><h1>Zhou 项目代码结构图册</h1><div class="tip">现在每张图都支持：<strong>鼠标滚轮直接缩放</strong>、<strong>左键按住拖动查看</strong>。不需要点击按钮。</div><h2>1. 全项目函数调用总图</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+subgraph MAIN["src/zhou/main.py"]
+M1["main() @ src/zhou/main.py"]
+M2["run() @ src/zhou/main.py"]
+M3["_bootstrap() @ src/zhou/main.py"]
+M4["_handle_turn() @ src/zhou/main.py"]
+M5["refresh_skills() @ src/zhou/main.py"]
+M6["refresh_tools() @ src/zhou/main.py"]
+M7["build_system_prompt() @ src/zhou/main.py"]
+M8["build_tool_executor() @ src/zhou/main.py"]
+M9["build_openai_tools() @ src/zhou/main.py"]
+M10["open_skills_picker() @ src/zhou/main.py"]
+end
+subgraph COMMANDS["src/zhou/core/commands.py"]
+C1["parse_command() @ src/zhou/core/commands.py"]
+end
+subgraph CONFIG["src/zhou/core/config.py"]
+CFG1["ensure_user_config_file() @ src/zhou/core/config.py"]
+CFG2["ensure_project_config_file() @ src/zhou/core/config.py"]
+CFG3["AppConfig.load() @ src/zhou/core/config.py"]
+end
+subgraph SESSION["src/zhou/session.py"]
+S1["SessionState.load_latest_or_new() @ src/zhou/session.py"]
+S2["SessionState.build_turn_messages() @ src/zhou/session.py"]
+S3["build_turn_record() @ src/zhou/session.py"]
+S4["SessionState.append_turn() @ src/zhou/session.py"]
+S5["SessionState.replace_turn() @ src/zhou/session.py"]
+end
+subgraph SKILLS["src/zhou/skills.py"]
+SK1["discover_skills() @ src/zhou/skills.py"]
+SK2["build_skill_system_prompt() @ src/zhou/skills.py"]
+end
+subgraph TOOLS["src/zhou/tools.py"]
+T1["discover_tool_registry() @ src/zhou/tools.py"]
+T2["call_tool() @ src/zhou/tools.py"]
+T3["discover_tools_via_stdio() @ src/zhou/tools.py"]
+T4["request_mcp() @ src/zhou/tools.py"]
+end
+subgraph TUI["src/zhou/tui.py"]
+UI1["pick_skills() @ src/zhou/tui.py"]
+UI2["open_tools_screen() @ src/zhou/tui.py"]
+UI3["render_stream_event() @ src/zhou/tui.py"]
+UI4["finish_open_streams() @ src/zhou/tui.py"]
+end
+subgraph LLM["src/zhou/core/llm.py"]
+L1["LlmClient.respond_turn() @ src/zhou/core/llm.py"]
+L2["LlmClient.chat_with_tools() @ src/zhou/core/llm.py"]
+L3["LlmClient._stream_round() @ src/zhou/core/llm.py"]
+end
+subgraph MEMORY_MGR["src/zhou/memory/manager.py"]
+MM1["search_all_scopes() @ src/zhou/memory/manager.py"]
+MM2["format_memory_context() @ src/zhou/memory/manager.py"]
+MM3["search_memory() @ src/zhou/memory/manager.py"]
+MM4["apply_enriched_result() @ src/zhou/memory/manager.py"]
+MM5["write_versioned_memory() @ src/zhou/memory/manager.py"]
+end
+subgraph MEMORY_MODEL["src/zhou/memory/model.py"]
+MD1["MemoryModelWorker.submit() @ src/zhou/memory/model.py"]
+MD2["MemoryModelWorker._run() @ src/zhou/memory/model.py"]
+MD3["MemoryModelClient.generate_turn_enrichment() @ src/zhou/memory/model.py"]
+MD4["build_memory_model_prompt() @ src/zhou/memory/model.py"]
+end
+subgraph MEMORY_ENRICH["src/zhou/memory/enrichment.py"]
+ME1["derive_turn_tags() @ src/zhou/memory/enrichment.py"]
+ME2["derive_memory_candidates() @ src/zhou/memory/enrichment.py"]
+end
+subgraph MEM_CMD["src/zhou/memory/commands.py"]
+MC1["handle_memory_command() @ src/zhou/memory/commands.py"]
+end
+subgraph ARCHIVE["src/zhou/global_archive.py"]
+A1["build_global_archive_writer() @ src/zhou/global_archive.py"]
+A2["append_turn() @ src/zhou/global_archive.py"]
+end
+M1-->M2
+M2-->M3
+M2-->C1
+M2-->M10
+M2-->UI2
+M2-->MC1
+M2-->M4
+M3-->CFG1
+M3-->CFG2
+M3-->CFG3
+M3-->S1
+M3-->M5
+M3-->M6
+M3-->A1
+M5-->SK1
+M6-->T1
+T1-->T3
+T3-->T4
+M10-->UI1
+M10-->M5
+M4-->M6
+M4-->MM1
+M4-->MM2
+M4-->M7
+M4-->M9
+M4-->M8
+M4-->S2
+M4-->L1
+M4-->UI3
+M4-->UI4
+M4-->S3
+M4-->S4
+M4-->A2
+M4-->MM3
+M4-->MD1
+M7-->SK2
+M8-->T2
+L1-->L2
+L1-->L3
+L2-->T2
+T2-->T4
+S3-->ME1
+S3-->ME2
+MD1-->MD2
+MD2-->MD3
+MD3-->MD4
+MD2-->S3
+MD2-->MM4
+MM4-->S5
+MM4-->MM5</div></div></div><div class="desc">总图强调全局调用关系，不是严格单线流程。</div></div><h2>2. 启动与初始化流程</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+A["main() @ src/zhou/main.py"]-->B["run() @ src/zhou/main.py"]
+B-->C["_bootstrap() @ src/zhou/main.py"]
+C-->D["ensure_project_layout() @ src/zhou/main.py"]
+C-->E["ensure_user_config_file() @ src/zhou/core/config.py"]
+C-->F["ensure_project_config_file() @ src/zhou/core/config.py"]
+C-->G["AppConfig.load() @ src/zhou/core/config.py"]
+C-->H["ensure_qdrant_container() @ src/zhou/main.py"]
+C-->I["build_memory_manager() @ src/zhou/main.py"]
+C-->J["build_global_archive_writer() @ src/zhou/global_archive.py"]
+C-->K["SessionState.load_latest_or_new() @ src/zhou/session.py"]
+C-->L["refresh_skills() @ src/zhou/main.py"]
+C-->M["refresh_tools() @ src/zhou/main.py"]
+C-->N["MemoryModelWorker @ src/zhou/memory/model.py"]
+L-->O["discover_skills() @ src/zhou/skills.py"]
+M-->P["discover_tool_registry() @ src/zhou/tools.py"]</div></div></div></div><h2>3. 单轮对话主流程</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+A["_handle_turn() @ src/zhou/main.py"]-->B["refresh_tools() @ src/zhou/main.py"]
+A-->C["search_all_scopes() @ src/zhou/memory/manager.py"]
+A-->D["format_memory_context() @ src/zhou/memory/manager.py"]
+A-->E["build_system_prompt() @ src/zhou/main.py"]
+A-->F["build_openai_tools() @ src/zhou/main.py"]
+A-->G["build_tool_executor() @ src/zhou/main.py"]
+A-->H["SessionState.build_turn_messages() @ src/zhou/session.py"]
+A-->I["LlmClient.respond_turn() @ src/zhou/core/llm.py"]
+I-->J["render_stream_event() @ src/zhou/tui.py"]
+A-->K["finish_open_streams() @ src/zhou/tui.py"]
+A-->L["build_turn_record() @ src/zhou/session.py"]
+A-->M["SessionState.append_turn() @ src/zhou/session.py"]
+A-->N["append_turn() @ src/zhou/global_archive.py"]
+A-->O["MemoryModelWorker.submit() @ src/zhou/memory/model.py"]</div></div></div></div><h2>4. Skills 加载与注入流程</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+A["refresh_skills() @ src/zhou/main.py"]-->B["discover_skills() @ src/zhou/skills.py"]
+B-->C["load_skill() @ src/zhou/skills.py"]
+C-->D["parse_skill_document() @ src/zhou/skills.py"]
+D-->E["parse_frontmatter_lines() @ src/zhou/skills.py"]
+F["build_system_prompt() @ src/zhou/main.py"]-->G["build_skill_system_prompt() @ src/zhou/skills.py"]
+H["open_skills_picker() @ src/zhou/main.py"]-->I["pick_skills() @ src/zhou/tui.py"]
+H-->A</div></div></div></div><h2>5. Tools 发现与调用流程</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+A["refresh_tools() @ src/zhou/main.py"]-->B["discover_tool_registry() @ src/zhou/tools.py"]
+B-->C["ensure_project_tools_file() @ src/zhou/tools.py"]
+B-->D["parse_source_config() @ src/zhou/tools.py"]
+B-->E["resolve_source_templates() @ src/zhou/tools.py"]
+B-->F["inspect_and_discover_source() @ src/zhou/tools.py"]
+F-->G["discover_tools_via_stdio() @ src/zhou/tools.py"]
+G-->H["McpSession.list_tools() @ src/zhou/tools.py"]
+H-->I["request_mcp() @ src/zhou/tools.py"]
+J["build_tool_executor() @ src/zhou/main.py"]-->K["call_tool() @ src/zhou/tools.py"]
+K-->L["McpSession.call_tool() @ src/zhou/tools.py"]
+L-->I</div></div></div></div><h2>6. Session 持久化流程</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+A["SessionState.load_latest_or_new() @ src/zhou/session.py"]-->B["SessionState.load_latest() @ src/zhou/session.py"]
+B-->C["SessionState.from_storage() @ src/zhou/session.py"]
+C-->D["load_message_history() @ src/zhou/session.py"]
+D-->E["load_turn_records() @ src/zhou/session.py"]
+F["build_turn_record() @ src/zhou/session.py"]-->G["derive_turn_tags() @ src/zhou/memory/enrichment.py"]
+F-->H["derive_memory_candidates() @ src/zhou/memory/enrichment.py"]
+I["SessionState.append_turn() @ src/zhou/session.py"]-->J["append_turn_to_storage() @ src/zhou/session.py"]
+I-->K["save() @ src/zhou/session.py"]
+L["apply_enriched_result() @ src/zhou/memory/manager.py"]-->M["SessionState.replace_turn() @ src/zhou/session.py"]</div></div></div></div><h2>7. Memory 检索与异步富化流程</h2><div class="card diagram"><div class="stage"><div class="canvas"><div class="mermaid">flowchart TD
+A["_handle_turn() @ src/zhou/main.py"]-->B["search_all_scopes() @ src/zhou/memory/manager.py"]
+B-->C["search_memory() @ src/zhou/memory/manager.py"]
+A-->D["format_memory_context() @ src/zhou/memory/manager.py"]
+A-->E["MemoryModelWorker.submit() @ src/zhou/memory/model.py"]
+E-->F["MemoryModelWorker._run() @ src/zhou/memory/model.py"]
+F-->G["MemoryModelClient.generate_turn_enrichment() @ src/zhou/memory/model.py"]
+G-->H["build_memory_model_prompt() @ src/zhou/memory/model.py"]
+G-->I["parse_memory_model_output() @ src/zhou/memory/model.py"]
+F-->J["build_turn_record() @ src/zhou/session.py"]
+F-->K["apply_enriched_result() @ src/zhou/memory/manager.py"]
+K-->L["SessionState.replace_turn() @ src/zhou/session.py"]
+K-->M["write_versioned_memory() @ src/zhou/memory/manager.py"]</div></div></div></div><div class="hint">提示：缩放以鼠标所在位置为中心，拖动仅在图区域内生效。</div></div></body></html>

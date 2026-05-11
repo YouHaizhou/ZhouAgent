@@ -1,0 +1,39 @@
+{
+  "name": "memory_search_should_participate_in_answer",
+  "category": "memory",
+  "description": "验证记忆检索参与回答构造，并产生 session 侧记忆行为。",
+  "input": "总结一下这个项目的会话机制，并结合上下文说明它的作用",
+  "environment": {
+    "cwd": "project_root",
+    "session_mode": "isolated",
+    "memory_mode": "real"
+  },
+  "assertions": {
+    "flow": {
+      "expect_success": true,
+      "expect_final_answer": true,
+      "expect_turn_persisted": true
+    },
+    "tools": {
+      "must_call": [],
+      "must_not_call": [],
+      "call_order_any_of": [],
+      "argument_contains": {}
+    },
+    "memory": {
+      "expect_search": true,
+      "expect_write": true,
+      "expected_scopes": ["session"],
+      "expected_classes": []
+    },
+    "answer": {
+      "contains": ["会话", "session"],
+      "not_contains": ["没有上下文", "无法总结"],
+      "min_length": 30
+    }
+  },
+  "analysis": {
+    "failure_tags": ["memory", "answer"],
+    "notes": "如果 memory 断言失败，优先检查 search_all_scopes、memory context 组装和异步回写。"
+  }
+}

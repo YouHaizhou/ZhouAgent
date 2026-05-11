@@ -1,0 +1,39 @@
+{
+  "name": "answer_should_include_codebase_context",
+  "category": "answer",
+  "description": "验证回答能结合当前代码库上下文，而不是给出泛化空话。",
+  "input": "说明一下这个项目里 main.py 的职责，要求先给结论再解释",
+  "environment": {
+    "cwd": "project_root",
+    "session_mode": "isolated",
+    "memory_mode": "real"
+  },
+  "assertions": {
+    "flow": {
+      "expect_success": true,
+      "expect_final_answer": true,
+      "expect_turn_persisted": true
+    },
+    "tools": {
+      "must_call": [],
+      "must_not_call": [],
+      "call_order_any_of": [],
+      "argument_contains": {}
+    },
+    "memory": {
+      "expect_search": true,
+      "expect_write": true,
+      "expected_scopes": ["session"],
+      "expected_classes": []
+    },
+    "answer": {
+      "contains": ["main.py", "主入口", "初始化"],
+      "not_contains": ["我不了解这个项目", "无法确定"],
+      "min_length": 40
+    }
+  },
+  "analysis": {
+    "failure_tags": ["answer", "flow"],
+    "notes": "如果回答过于泛化，优先检查是否缺少代码上下文或工具触发策略过弱。"
+  }
+}

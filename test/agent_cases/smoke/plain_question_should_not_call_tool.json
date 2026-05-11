@@ -1,0 +1,39 @@
+{
+  "name": "plain_question_should_not_call_tool",
+  "category": "smoke",
+  "description": "普通概念问答不应触发文件或 shell 工具。",
+  "input": "请解释一下 session 在这个项目里的作用",
+  "environment": {
+    "cwd": "project_root",
+    "session_mode": "isolated",
+    "memory_mode": "real"
+  },
+  "assertions": {
+    "flow": {
+      "expect_success": true,
+      "expect_final_answer": true,
+      "expect_turn_persisted": true
+    },
+    "tools": {
+      "must_call": [],
+      "must_not_call": ["filesystem.read_file", "shell.run_command"],
+      "call_order_any_of": [],
+      "argument_contains": {}
+    },
+    "memory": {
+      "expect_search": true,
+      "expect_write": true,
+      "expected_scopes": ["session"],
+      "expected_classes": []
+    },
+    "answer": {
+      "contains": ["session", "会话"],
+      "not_contains": ["无法回答", "未知"],
+      "min_length": 30
+    }
+  },
+  "analysis": {
+    "failure_tags": ["flow", "tool", "answer"],
+    "notes": "如果误调工具，优先检查主提示词和 tool schema。"
+  }
+}

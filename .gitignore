@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.venv/
+venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Project local runtime state
+.zhou/
+logs/
+
+# Local test artifacts
+test/traces/
+test/reports/
+test/artifacts/
+
+# Temporary local files
+.tmp_mcp_probe/
+*.tgz
+
+# Local env / secrets
+.env
+.env.*

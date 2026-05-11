@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate-flow-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Expose source package
+        run: echo "PYTHONPATH=${{ github.workspace }}/src" >> $GITHUB_ENV
+
+      - name: Syntax check project sources
+        run: python -m compileall src
+
+      - name: Validate structured agent cases
+        run: python -m zhou.testcases ./test/agent_cases
+
+      - name: Show tracked case categories
+        run: |
+          python -m zhou.testcases ./test/agent_cases --category smoke
+          python -m zhou.testcases ./test/agent_cases --category tools
+          python -m zhou.testcases ./test/agent_cases --category memory
+          python -m zhou.testcases ./test/agent_cases --category answer
+
+  # This project currently separates flow-test gatekeeping from
+  # heavier real-run evaluation. When secrets, Docker, and memory
+  # infrastructure are stabilized, add a second job here for
+  # zhou.test_runner-based smoke execution.
