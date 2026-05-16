@@ -87,9 +87,10 @@ def parse_string_list(value:object)->list[str]:return [str(i).strip() for i in v
 
 def normalize_summary(value:str,max_length:int=400)->str:
     compact=" ".join(str(value).split()).strip();return compact if len(compact)<=max_length else compact[:max_length-1].rstrip()+"…"
-def load_message_history(turns_path:Path)->list[dict[str,object]]:
+def load_message_history(turns_path:Path,limit_turns:int=3)->list[dict[str,object]]:
     history:list[dict[str,object]]=[]
-    for turn in load_turn_records(turns_path):
+    turns=load_turn_records(turns_path)
+    for turn in turns[-limit_turns:]:
         if turn.user:history.append({"role":"user","content":turn.user})
         if turn.assistant:history.append({"role":"assistant","content":turn.assistant})
     return history

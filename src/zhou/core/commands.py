@@ -9,6 +9,7 @@ class CommandType(str, Enum):
     SKILLS = "skills"
     TOOLS = "tools"
     MEMORY = "memory"
+    ROLLBACK = "rollback"
 
 
 def parse_command(user_input: str) -> CommandType:
@@ -21,4 +22,6 @@ def parse_command(user_input: str) -> CommandType:
         return CommandType.TOOLS
     if normalized.startswith("/memory"):
         return CommandType.MEMORY
+    if normalized == "/rollback":
+        return CommandType.ROLLBACK
     return CommandType.NONE

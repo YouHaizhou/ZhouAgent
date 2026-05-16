@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any,Protocol
 from ..core.config import MemorySettings
 from ..core.errors import MemoryInitError
+from ..rollback import is_tombstoned_memory
 from ..session import SessionState, TurnRecord
 try:
     from mem0 import Memory
@@ -122,7 +123,12 @@ def parse_search_result(raw:object)->MemorySearchResult:
 def collapse_memory_result(result:MemorySearchResult,*,limit:int)->MemorySearchResult:
     grouped:dict[str,MemorySearchHit]={};others:list[MemorySearchHit]=[]
     for hit in result.hits:
-        key=str(hit.record.metadata.get("memory_key") or "").strip()
+        memory_key = str(hit.record.metadata.get("memory_key") or "").strip()
+        revision = safe_revision(hit)
+        project_cwd = Path(hit.record.cwd) if hit.record.cwd else None
+        if memory_key and revision > 0 and is_tombstoned_memory(project_cwd, memory_key=memory_key, revision=revision):
+            continue
+        key=memory_key
         if not key:others.append(hit);continue
         existing=grouped.get(key)
         if existing is None or safe_revision(hit)>safe_revision(existing) or (safe_revision(hit)==safe_revision(existing) and hit.score>=existing.score):grouped[key]=hit
@@ -167,7 +173,7 @@ def looks_like_procedural_memory(text: str) -> bool:
     return bool(__import__("re").search(r"(?:^|\s)[1-9][\.、]|第\d+步", compact))
 
 
-def apply_enriched_result(session: SessionState, memory: Any, result: EnrichedTurnResult) -> MemoryApplyStatus:
+def apply_enriched_result(session: SessionState, memory: Any, result: EnrichedTurnResult, rollback: Any | None = None) -> MemoryApplyStatus:
     """Apply the async memory-model output back onto the session turn and memory store.
 
     This function was previously in ``main.py``; moved here because it operates
@@ -221,6 +227,8 @@ def apply_enriched_result(session: SessionState, memory: Any, result: EnrichedTu
             memory_key=key,
             revision=rev,
         )
+        if rollback is not None:
+            rollback.record_memory_write(scope=MemoryScope.SESSION.value, memory_class=MemoryClass.EPISODIC.value, memory_key=key, revision=rev)
         session_episodic_changed = True
         status.session_episodic_action=output.session_episodic.decision
 
@@ -256,6 +264,8 @@ def apply_enriched_result(session: SessionState, memory: Any, result: EnrichedTu
             memory_key=key,
             revision=rev,
         )
+        if rollback is not None:
+            rollback.record_memory_write(scope=MemoryScope.SESSION.value, memory_class=MemoryClass.SEMANTIC.value, memory_key=key, revision=rev)
         status.session_semantic_action=output.session_semantic.decision
 
     if output.folder_procedural.decision in {"insert", "update"} and output.folder_procedural.content:
@@ -290,6 +300,8 @@ def apply_enriched_result(session: SessionState, memory: Any, result: EnrichedTu
             memory_key=key,
             revision=rev,
         )
+        if rollback is not None:
+            rollback.record_memory_write(scope=MemoryScope.FOLDER.value, memory_class=MemoryClass.PROCEDURAL.value, memory_key=key, revision=rev)
         status.folder_procedural_action=output.folder_procedural.decision
     return status
 

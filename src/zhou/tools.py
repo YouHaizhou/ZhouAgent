@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
 import json
@@ -22,6 +23,7 @@ MCP_PROTOCOL_VERSION = "2024-11-05"
 PROJECT_DIR_TOKENS = ("${project_dir}", "$PROJECT_DIR", "{project_dir}")
 PROJECT_LOGS_RELATIVE_DIR = Path(".zhou") / "logs"
 MCP_SERVER_LOG_FILENAME = "mcp-server.log"
+MCP_DISCOVERY_TRACE_FILENAME = "mcp-discovery-trace.jsonl"
 
 
 @dataclass(slots=True)
@@ -273,15 +275,34 @@ def inspect_and_discover_source(source: ToolSourceConfig, project_cwd: Path) -> 
     if resolved is None:
         return ToolSourceState(source_id=source.id, status="failed", message=f"command not found: {source.command}"), []
 
+    before_snapshot = snapshot_top_level_entries(project_cwd)
+    discovered: list[ToolDescriptor] = []
+    status = "ready"
+    message = ""
     try:
         discovered = discover_tools_via_stdio(source, working_directory)
+        message = f"discovered {len(discovered)} tools"
     except Exception as exc:
-        return ToolSourceState(source_id=source.id, status="failed", message=str(exc)), []
+        status = "failed"
+        message = str(exc)
+    finally:
+        after_snapshot = snapshot_top_level_entries(project_cwd)
+        append_mcp_discovery_trace(
+            project_cwd,
+            source=source,
+            working_directory=working_directory,
+            status=status,
+            message=message,
+            created_entries=diff_created_entries(before_snapshot, after_snapshot),
+        )
+
+    if status != "ready":
+        return ToolSourceState(source_id=source.id, status=status, message=message), []
 
     return ToolSourceState(
         source_id=source.id,
-        status="ready",
-        message=f"discovered {len(discovered)} tools",
+        status=status,
+        message=message,
         discovered_count=len(discovered),
     ), discovered
 
@@ -378,6 +399,45 @@ def project_logs_dir(project_cwd: Path) -> Path:
     log_dir = project_cwd / PROJECT_LOGS_RELATIVE_DIR
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
+
+
+def snapshot_top_level_entries(project_cwd: Path) -> set[str]:
+    try:
+        return {child.name for child in project_cwd.iterdir()}
+    except OSError:
+        return set()
+
+
+def diff_created_entries(before: set[str], after: set[str]) -> list[str]:
+    return sorted(name for name in after - before if name and name not in {".zhou", "__pycache__"})
+
+
+def append_mcp_discovery_trace(
+    project_cwd: Path,
+    *,
+    source: ToolSourceConfig,
+    working_directory: Path,
+    status: str,
+    message: str,
+    created_entries: list[str],
+) -> None:
+    try:
+        log_path = project_logs_dir(project_cwd) / MCP_DISCOVERY_TRACE_FILENAME
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source_id": source.id,
+            "command": source.command,
+            "args": list(source.args),
+            "configured_cwd": source.cwd,
+            "working_directory": str(working_directory),
+            "status": status,
+            "message": message,
+            "created_entries": created_entries,
+        }
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        return
 
 
 def attach_mcp_stderr_logger(process: subprocess.Popen[bytes], *, project_cwd: Path) -> None:

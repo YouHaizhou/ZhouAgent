@@ -11,6 +11,7 @@ from .global_archive import build_global_archive_writer
 from .memory.manager import Mem0MemoryManager, NullMemoryManager, MemoryKind, MemoryScope, apply_enriched_result, format_memory_context, normalize_cwd
 from .memory.commands import handle_memory_command
 from .memory.model import MemoryJobResult, MemoryModelClient, MemoryModelJob, MemoryModelWorker
+from .rollback import LastTurnRollbackManager, render_rollback_result
 from .session import SessionState, TurnRecord, build_turn_record, load_turn_records
 from .skills import build_skill_system_prompt, discover_skills
 from .tools import ToolDescriptor, call_tool, discover_tool_registry
@@ -25,51 +26,36 @@ DEFAULT_AGENT_MARKDOWN="""<!--
 
 ## Role
 你是当前项目中的主对话处理 Agent。
-你的核心职责是：理解用户当前请求，结合必要的工具与上下文，以低成本、高正确性和高可执行性的方式完成当前任务。
+你的目标是：理解用户请求，结合必要上下文与工具，用尽量低的成本完成当前任务。
 
-## Project Context
-- 这是一个本地 Agent 项目，具备工具调用、技能系统、会话管理和后台异步记忆处理能力。
-- 你的首要目标是处理“当前问题”，而不是主动设计或决策长期记忆存取。
-- 记忆写入、记忆提升、记忆更新由独立的后台 memory model 负责。
-
-## Behavioral Rules
-- 先判断任务复杂度，再决定是否使用工具或长链路处理。
-- 若不需要外部信息、文件读取或执行结果支持，优先直接回答。
-- 工具调用应以“最少必要次数”为原则，避免重复调用、验证性调用和低收益调用。
-- 除非确有必要，不要为了确认而再次调用相同或相近工具。
-- 优先给出结论、最小修改方案或下一步动作，不要无目的展开。
-- 若信息已足够，应尽快收敛并输出最终结果。
-- 除用户明确要求外，不主动扩展到与当前任务无关的话题。
-
-## Cost Control Rules
-- 控制输出长度，避免生成冗长解释、重复表述和大段无用背景。
-- 控制思考成本：简单任务使用简短推理，复杂任务再使用更深推理。
-- 控制工具成本：一次能解决的问题不要拆成多次工具调用。
-- 控制上下文成本：不要反复复述已知信息，不要引入不必要的历史上下文。
-- 不主动为了“沉淀记忆”而展开额外描述；主回答以完成当前任务为准。
+## Working Principles
+- 先判断任务复杂度，再决定是否调用工具。
+- 能直接回答时直接回答，避免为了确认而重复调用工具。
+- 工具调用以最少必要次数为原则。
+- 信息足够时尽快收敛，不做无关扩展。
+- 默认使用中文，表达清晰、简洁、可执行。
 
 ## Memory Boundary
-- 你可以使用系统已经提供的记忆上下文来帮助回答当前问题。
-- 你不负责决定哪些内容应写入长期记忆。
-- 你不负责设计记忆 revision、promotion、merge 或 skip 策略。
-- 这些记忆相关决策交由后台异步 memory model 处理。
+- 你可以使用系统提供的记忆上下文帮助回答。
+- 你不负责决定长期记忆写入、revision、promotion、merge、skip。
+- 这些由独立的 memory model 处理。
 
-## Output Preferences
-- 默认使用中文。
+## Output Rules
 - 先给结论，再给必要解释。
-- 输出应简洁、直接、可执行。
+- 若回复内容较短，或只是简单总结、直接结论、简短判断，则直接在当前对话中输出。
+- 若内容属于名词解释、方案设计、结构化总结、长篇说明、可复用知识沉淀，则优先整理成文档输出。
+- 需要沉淀为文档时，优先写到当前项目的 `docs/` 目录，再在对话里给出简要结论和文档路径。
 - 代码相关问题优先给出定位、原因、修改点和验证方式。
-- 若存在多种方案，优先给出成本最低、实现最直接、风险最可控的方案。
+- 若存在多种方案，保障效果的同时优先给出可维护、实现简单、风险最可控的方案。
 
 ## Out of Scope
 - 不主动进行与当前任务无关的长篇教学式展开。
-- 不主动进行高成本的多轮探索，除非任务收益明显大于成本。
 - 不主动生成大段重复内容、无依据判断或形式化空话。
-- 不主动承担记忆写入、长期记忆提升或用户画像归纳职责。
+- 不主动承担长期记忆设计或用户画像归纳职责。
 """
 RESET="\033[0m";DIM="\033[2m";ACCENT="\033[38;5;153m";BLUE="\033[38;5;117m";GREEN="\033[38;5;48m";GRAY="\033[38;5;245m";RED="\033[38;5;203m"
 WORDMARK=[f"{ACCENT}███████╗{RESET} {ACCENT}██╗  ██╗{RESET} {ACCENT} ██████╗ {RESET} {ACCENT}██╗   ██╗{RESET}",f"{ACCENT}╚══███╔╝{RESET} {ACCENT}██║  ██║{RESET} {ACCENT}██╔═══██╗{RESET} {ACCENT}██║   ██║{RESET}",f"{ACCENT}  ███╔╝ {RESET} {ACCENT}███████║{RESET} {ACCENT}██║   ██║{RESET} {ACCENT}██║   ██║{RESET}",f"{ACCENT} ███╔╝  {RESET} {ACCENT}██╔══██║{RESET} {ACCENT}██║   ██║{RESET} {ACCENT}██║   ██║{RESET}",f"{ACCENT}███████╗{RESET} {ACCENT}██║  ██║{RESET} {ACCENT}╚██████╔╝{RESET} {ACCENT}╚██████╔╝{RESET}",f"{ACCENT}╚══════╝{RESET} {ACCENT}╚═╝  ╚═╝{RESET} {ACCENT} ╚═════╝ {RESET} {ACCENT} ╚═════╝ {RESET}"]
-WELCOME_HINTS=(f"{DIM}输入内容开始对话{RESET}",f"{DIM}输入 /skills 管理技能{RESET}",f"{DIM}输入 /tools 查看工具{RESET}",f"{DIM}输入 /memory help 查看记忆命令{RESET}",f"{DIM}输入 /exit 退出{RESET}")
+WELCOME_HINTS=(f"{DIM}输入内容开始对话{RESET}",f"{DIM}输入 /skills 管理技能{RESET}",f"{DIM}输入 /tools 查看工具{RESET}",f"{DIM}输入 /memory help 查看记忆命令{RESET}",f"{DIM}输入 /rollback 回滚上一轮{RESET}",f"{DIM}输入 /exit 退出{RESET}")
 def main()->None:
     try:run()
     except ZhouError as error:print(f"\nerror: {error}");raise SystemExit(1) from error
@@ -134,12 +120,66 @@ def open_skills_picker(session:SessionState)->None:
     render_skills_summary(session,result)
 def build_system_prompt(session:SessionState)->str:
     base=load_base_system_prompt(session.cwd);skill_prompt=build_skill_system_prompt(session.active_skills);return base if not skill_prompt else f"{base}\n\n{skill_prompt}"
-def build_tool_executor(session:SessionState):
+def build_tool_executor(session:SessionState, rollback: LastTurnRollbackManager | None = None):
     name_map={safe_tool_name(tool):tool.qualified_name for tool in session.tool_registry.tools if tool.enabled}
-    def _execute(qualified_name:str,arguments_json:str)->str:return call_tool(session.tool_registry,name_map.get(qualified_name,qualified_name),arguments_json,session.cwd)
+    def _execute(qualified_name:str,arguments_json:str)->str:
+        if rollback is not None:
+            rollback.ensure_workspace_snapshot()
+        result = call_tool(session.tool_registry,name_map.get(qualified_name,qualified_name),arguments_json,session.cwd)
+        if rollback is not None:
+            rollback.record_tool_call(name=name_map.get(qualified_name,qualified_name), arguments=arguments_json, result=result)
+        return result
     return _execute
 def build_openai_tools(session:SessionState)->list[dict[str,object]]:return [tool_to_openai_function(tool) for tool in session.tool_registry.tools if tool.enabled]
 def tool_to_openai_function(tool:ToolDescriptor)->dict[str,object]:return {"type":"function","function":{"name":safe_tool_name(tool),"description":tool.description,"parameters":tool.input_schema or {"type":"object","properties":{}}}}
+
+def read_rollback_preview(rollback: LastTurnRollbackManager) -> dict[str, object]:
+    path = rollback.meta_path()
+    if not path.is_file():
+        return {"ok": False, "message": "没有可回滚的上一轮记录。"}
+    try:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"ok": False, "message": "回滚记录损坏，无法预览。"}
+    if not isinstance(meta, dict):
+        return {"ok": False, "message": "回滚记录格式无效。"}
+    if meta.get("status") == "rolled_back":
+        return {"ok": False, "message": "上一轮已经回滚过了。"}
+    changes = meta.get("workspace_changes") or {}
+    memory_writes = meta.get("memory_writes") or []
+    tool_calls = meta.get("tool_calls") or []
+    return {
+        "ok": True,
+        "message": "检测到可回滚的上一轮。",
+        "user_input": str(meta.get("user_input") or "").strip(),
+        "assistant_preview": str(meta.get("assistant_preview") or "").strip(),
+        "status": str(meta.get("status") or "unknown"),
+        "tool_names": [str(item.get("name") or "").strip() for item in tool_calls if isinstance(item, dict) and str(item.get("name") or "").strip()],
+        "modified_files": list(changes.get("modified") or []),
+        "deleted_files": list(changes.get("deleted") or []),
+        "created_files": list(changes.get("created") or []),
+        "memory_revisions": [f"{str(item.get('memory_key') or '').strip()}@{int(item.get('revision') or 0)}" for item in memory_writes if isinstance(item, dict) and str(item.get("memory_key") or "").strip() and int(item.get("revision") or 0) > 0],
+    }
+
+def render_rollback_preview_text(preview: dict[str, object]) -> None:
+    print()
+    print(str(preview.get("message") or ""))
+    if not bool(preview.get("ok")):
+        print()
+        return
+    if str(preview.get("user_input") or "").strip():
+        print(f"用户输入：{str(preview.get('user_input') or '').strip()}")
+    if str(preview.get("assistant_preview") or "").strip():
+        print(f"回答摘要：{str(preview.get('assistant_preview') or '').strip()}")
+    print(f"状态：{str(preview.get('status') or 'unknown')}")
+    for title, key, limit in (("工具调用", "tool_names", 10), ("将恢复修改文件", "modified_files", 20), ("将恢复被删除文件", "deleted_files", 20), ("将删除新增文件", "created_files", 20), ("将撤回记忆 revision", "memory_revisions", 20)):
+        items = [str(item).strip() for item in (preview.get(key) or []) if str(item).strip()]
+        if not items:
+            continue
+        print(f"{title}：")
+        for item in items[:limit]:
+            print(f"  - {item}")
+    print()
 
 
 def _bootstrap():
@@ -163,7 +203,8 @@ def _bootstrap():
     refresh_skills(session)
     refresh_tools(session)
     worker = MemoryModelWorker(MemoryModelClient(config))
-    return cwd, config, client, memory, archive_writer, session, worker
+    rollback = LastTurnRollbackManager(cwd)
+    return cwd, config, client, memory, archive_writer, session, worker, rollback
 
 
 def _handle_turn(
@@ -174,8 +215,10 @@ def _handle_turn(
     memory,
     archive_writer,
     worker: MemoryModelWorker,
+    rollback: LastTurnRollbackManager,
 ) -> None:
     """处理单轮对话：LLM 调用 → 流渲染 → 记忆持久化 + 异步富化。"""
+    rollback.start_turn(session, user_input)
     refresh_tools(session)
     normalized_cwd = normalize_cwd(str(session.cwd)) or str(session.cwd)
 
@@ -185,7 +228,7 @@ def _handle_turn(
     memory_context = format_memory_context(search_results)
     system_prompt = build_system_prompt(session)
     openai_tools = build_openai_tools(session)
-    tool_executor = build_tool_executor(session) if openai_tools else None
+    tool_executor = build_tool_executor(session, rollback) if openai_tools else None
     turn_messages = session.build_turn_messages(user_input, memory_context=memory_context)
 
     stream_state: dict[str, object] = {
@@ -220,9 +263,11 @@ def _handle_turn(
         tool_calls=stream_state["tool_calls"],
     )
     session.append_turn(turn)
+    rollback.finalize_turn(turn_timestamp=turn.timestamp, assistant_text=answer_text)
     archive_writer.append_turn(cwd=session.cwd, turn=turn)
 
-    def _on_memory_complete(_job_result: MemoryJobResult) -> None:
+    def _on_memory_complete(job_result: MemoryJobResult) -> None:
+        rollback.mark_memory_complete()
         return None
 
     # ---- 记忆模型异步富化 ----
@@ -258,17 +303,18 @@ def _handle_turn(
             existing_session_episodic=existing_session_episodic,
             existing_session_semantic=existing_session_semantic,
             existing_folder_procedural=existing_folder_procedural,
-            callback=lambda enriched: apply_enriched_result(session, memory, enriched),
+            callback=lambda enriched: apply_enriched_result(session, memory, enriched, rollback),
             on_complete=_on_memory_complete,
         )
     )
     if not submitted:
+        rollback.mark_memory_complete()
         return
 
 
 def run() -> None:
     """Zhou agent 主入口：启动 → 欢迎 → REPL 循环。"""
-    cwd, config, client, memory, archive_writer, session, worker = _bootstrap()
+    cwd, config, client, memory, archive_writer, session, worker, rollback = _bootstrap()
     render_welcome()
 
     try:
@@ -291,6 +337,17 @@ def run() -> None:
             if command == CommandType.MEMORY:
                 handle_memory_command(user_input, session, memory)
                 continue
+            if command == CommandType.ROLLBACK:
+                preview = read_rollback_preview(rollback)
+                render_rollback_preview_text(preview)
+                if not bool(preview.get("ok")):
+                    continue
+                confirmed = input("确认回滚上一轮？输入 y 继续，其它任意键取消: ").strip().lower()
+                if confirmed not in {"y", "yes"}:
+                    print("已取消回滚。\n")
+                    continue
+                render_rollback_result(rollback.rollback_last_turn(session))
+                continue
 
             try:
                 _handle_turn(
@@ -300,6 +357,7 @@ def run() -> None:
                     memory=memory,
                     archive_writer=archive_writer,
                     worker=worker,
+                    rollback=rollback,
                 )
             except ZhouError:
                 raise
